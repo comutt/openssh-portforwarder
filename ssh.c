@@ -40,6 +40,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef _TOH_
+#include <io.h>
+#endif /* _TOH_ */
 #include "includes.h"
 
 #include <sys/types.h>
@@ -100,6 +103,9 @@
 #include "monitor_fdpass.h"
 #include "uidswap.h"
 #include "version.h"
+#if defined(_TOH_) && defined(USE_PAGEANT)
+#include "auth-pageant.h"
+#endif /* _TOH_ & USE_PAGEANT */
 
 #ifdef SMARTCARD
 #include "scard.h"
@@ -112,10 +118,18 @@ int debug_flag = 0;
 
 /* Flag indicating whether a tty should be allocated */
 int tty_flag = 0;
+#ifndef _TOH_
 int no_tty_flag = 0;
+#else /* _TOH_ */
+int no_tty_flag = 1;
+#endif /* _TOH_ */
 int force_tty_flag = 0;
 
 /* don't exec a shell */
+/*
+ * if no_shell_flag is set to 1, ssh_session2_setup() will not called.
+ * and also, 'forced command' on the server will ignored.
+ */
 int no_shell_flag = 0;
 
 /*
@@ -153,9 +167,11 @@ struct sockaddr_storage hostaddr;
 /* Private host keys. */
 Sensitive sensitive_data;
 
+#ifndef _TOH_
 /* Original real UID. */
 uid_t original_real_uid;
 uid_t original_effective_uid;
+#endif /* _TOH_ */
 
 /* command to be executed */
 Buffer command;
@@ -179,6 +195,13 @@ static u_int mux_command = 0;
 volatile sig_atomic_t control_client_terminate = 0;
 u_int control_server_pid = 0;
 
+#ifdef _TOH_
+extern char* user; /* PortForwarderDlg.cpp */
+extern char g_configFolder[];
+extern HWND g_hWnd;
+#endif /* _TOH_ */
+
+#ifndef _TOH_
 /* Prints a help message to the user.  This function never returns. */
 
 static void
@@ -194,6 +217,7 @@ usage(void)
 	);
 	exit(255);
 }
+#endif /* _TOH_ */
 
 static int ssh_session(void);
 static int ssh_session2(void);
@@ -204,7 +228,11 @@ static void control_client(const char *path);
  * Main program for the ssh client.
  */
 int
+#ifndef _TOH_
 main(int ac, char **av)
+#else /* _TOH_ */
+main()
+#endif /* _TOH_ */
 {
 	int i, opt, exit_status;
 	char *p, *cp, *line, buf[256];
@@ -216,12 +244,15 @@ main(int ac, char **av)
 	struct servent *sp;
 	Forward fwd;
 
+#ifndef _TOH_
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
 
 	__progname = ssh_get_progname(av[0]);
+#endif /* _TOH_ */
 	init_rng();
 
+#ifndef _TOH_
 	/*
 	 * Save the original real uid.  It will be needed later (uid-swapping
 	 * may clobber the real uid).
@@ -263,10 +294,12 @@ main(int ac, char **av)
 	 * don't set the modes explicitly.
 	 */
 	umask(022);
+#endif /* _TOH_ */
 
 	/* Initialize option structure to indicate that no values have been set. */
 	initialize_options(&options);
 
+#ifndef _TOH_
 	/* Parse command-line arguments. */
 	host = NULL;
 
@@ -556,10 +589,30 @@ main(int ac, char **av)
 	/* Check that we got a host name. */
 	if (!host)
 		usage();
+#else /* _TOH_ */
+    if (user) {
+        /* this must be given as a command-line option */
+		options.user = user;
+    }
+    /* command-line option '-N' */
+    if (strchr(pf_option, 'N')) {
+        no_shell_flag = 1;
+    }
+#ifdef _PFVERBOSE_
+    if (strchr(pf_option, 'v')) {   /* treat one '-v' as triple '-v' */
+        debug_flag = 1;
+        options.log_level = SYSLOG_LEVEL_DEBUG3;
+    }
+#endif /* _PFVERBOSE */
+#endif /* _TOH_ */
 
 	SSLeay_add_all_algorithms();
 	ERR_load_crypto_strings();
+    /* those functions have to be cleaned up by
+     *  EVP_cleanup() and ERR_free_strings()
+     */
 
+#ifndef _TOH_
 	/* Initialize the command to execute on remote host. */
 	buffer_init(&command);
 
@@ -609,6 +662,7 @@ main(int ac, char **av)
 	 */
 	log_init(av[0], options.log_level == -1 ? SYSLOG_LEVEL_INFO : options.log_level,
 	    SYSLOG_FACILITY_USER, 1);
+#endif /* _TOH_ */
 
 	/*
 	 * Read per-user configuration file.  Ignore the system wide config
@@ -618,6 +672,7 @@ main(int ac, char **av)
 		if (!read_config_file(config, host, &options, 0))
 			fatal("Can't open user config file %.100s: "
 			    "%.100s", config, strerror(errno));
+#ifndef _TOH_
 	} else {
 		snprintf(buf, sizeof buf, "%.100s/%.100s", pw->pw_dir,
 		    _PATH_SSH_USER_CONFFILE);
@@ -626,6 +681,9 @@ main(int ac, char **av)
 		/* Read systemwide configuration file after use config. */
 		(void)read_config_file(_PATH_HOST_CONFIG_FILE, host,
 		    &options, 0);
+#else /* _TOH_ */
+        /* never happens! */
+#endif /* _TOH_ */
 	}
 
 	/* Fill configuration defaults. */
@@ -633,13 +691,23 @@ main(int ac, char **av)
 
 	channel_set_af(options.address_family);
 
+#if defined(_TOH_) && defined(USE_PAGEANT)
+	if (pageant_get_handle())
+		pageant_create_auth_socket();
+#endif
 	/* reinit */
+#ifndef _TOH_
 	log_init(av[0], options.log_level, SYSLOG_FACILITY_USER, 1);
+#endif /* _TOH_ */
 
 	seed_rng();
 
 	if (options.user == NULL)
+#ifndef _TOH_
 		options.user = xstrdup(pw->pw_name);
+#else /* _TOH_ */
+        fatal("Please specify \"User\" in your config file.");
+#endif /* _TOH_ */
 
 	if (options.hostname != NULL)
 		host = options.hostname;
@@ -660,6 +728,7 @@ main(int ac, char **av)
 	if (options.proxy_command != NULL &&
 	    strcmp(options.proxy_command, "none") == 0)
 		options.proxy_command = NULL;
+#ifndef _TOH_
 	if (options.control_path != NULL &&
 	    strcmp(options.control_path, "none") == 0)
 		options.control_path = NULL;
@@ -680,18 +749,28 @@ main(int ac, char **av)
 		fatal("No ControlPath specified for \"-O\" command");
 	if (options.control_path != NULL)
 		control_client(options.control_path);
+#endif  /* _TOH_ */
 
 	/* Open a connection to the remote host. */
 	if (ssh_connect(host, &hostaddr, options.port,
 	    options.address_family, options.connection_attempts,
+#ifndef _TOH_
 #ifdef HAVE_CYGWIN
 	    options.use_privileged_port,
 #else
 	    original_effective_uid == 0 && options.use_privileged_port,
 #endif
+#else /* _TOH_ */
+	    options.use_privileged_port,
+#endif /* _TOH_ */
 	    options.proxy_command) != 0)
+#ifndef _TOH_
 		exit(255);
+#else /* _TOH_ */
+		fatal("Now exiting.");
+#endif /* _TOH_ */
 
+#ifndef _TOH_
 	/*
 	 * If we successfully made the connection, load the host private key
 	 * in case we will need it later for combined rsa-rhosts
@@ -749,10 +828,12 @@ main(int ac, char **av)
 	if (stat(buf, &st) < 0)
 		if (mkdir(buf, 0700) < 0)
 			error("Could not create directory '%.200s'.", buf);
+#endif /* _TOH_ */
 
 	/* load options.identity_files */
 	load_public_identity_files();
 
+#ifndef _TOH_
 	/* Expand ~ in known host file names. */
 	/* XXX mem-leaks: */
 	options.system_hostfile =
@@ -768,6 +849,25 @@ main(int ac, char **av)
 
 	/* Log into the remote system.  This never returns if the login fails. */
 	ssh_login(&sensitive_data, host, (struct sockaddr *)&hostaddr, pw);
+#else /* _TOH_ */
+    /* append config folder name in prior to the host file names */
+    {
+        char* filename_tmp;
+
+        filename_tmp = options.user_hostfile;
+        options.user_hostfile = xmalloc(strlen(g_configFolder) + strlen("\\")
+                                        + strlen(filename_tmp) + 1);
+        sprintf(options.user_hostfile, "%s\\%s", g_configFolder, filename_tmp);
+
+        filename_tmp = options.user_hostfile2;
+        options.user_hostfile2 = xmalloc(strlen(g_configFolder) + strlen("\\")
+                                         + strlen(filename_tmp) + 1);
+        sprintf(options.user_hostfile2, "%s\\%s", g_configFolder, filename_tmp);
+    }
+
+	/* Log into the remote system.  This never returns if the login fails. */
+	ssh_login(&sensitive_data, host, (struct sockaddr *)&hostaddr);
+#endif /* _TOH_ */
 
 	/* We no longer need the private host keys.  Clear them now. */
 	if (sensitive_data.nkeys != 0) {
@@ -792,9 +892,13 @@ main(int ac, char **av)
 		}
 	}
 
+#ifdef _TOH_
+    SendMessage(g_hWnd, MSG_CONNECTED, 0, 0);
+#endif /* _TOH_ */
 	exit_status = compat20 ? ssh_session2() : ssh_session();
 	packet_close();
 
+#ifndef _TOH_
 	if (options.control_path != NULL && control_fd != -1)
 		unlink(options.control_path);
 
@@ -804,6 +908,7 @@ main(int ac, char **av)
 	 */
 	if (proxy_command_pid > 1)
 		kill(proxy_command_pid, SIGHUP);
+#endif /* _TOH_ */
 
 	return exit_status;
 }
@@ -858,6 +963,7 @@ ssh_init_forwarding(void)
 		}
 	}
 
+#ifndef _TOH_
 	/* Initiate tunnel forwarding. */
 	if (options.tun_open != SSH_TUNMODE_NO) {
 		if (client_request_tun_fwd(options.tun_open,
@@ -868,6 +974,7 @@ ssh_init_forwarding(void)
 				error("Could not request tunnel forwarding.");
 		}
 	}			
+#endif /* _TOH_ */
 }
 
 static void
@@ -886,9 +993,11 @@ ssh_session(void)
 	int type;
 	int interactive = 0;
 	int have_tty = 0;
+#ifndef _TOH_
 	struct winsize ws;
 	char *cp;
 	const char *display;
+#endif /* _TOH_ */
 
 	/* Enable compression if requested. */
 	if (options.compression) {
@@ -910,6 +1019,7 @@ ssh_session(void)
 		else
 			packet_disconnect("Protocol error waiting for compression response.");
 	}
+#ifndef _TOH_
 	/* Allocate a pseudo tty if appropriate. */
 	if (tty_flag) {
 		debug("Requesting pty.");
@@ -970,6 +1080,7 @@ ssh_session(void)
 			packet_disconnect("Protocol error waiting for X11 forwarding");
 		}
 	}
+#endif /* _TOH_ */
 	/* Tell the packet module whether this is an interactive session. */
 	packet_set_interactive(interactive);
 
@@ -990,16 +1101,19 @@ ssh_session(void)
 	/* Initiate port forwardings. */
 	ssh_init_forwarding();
 
+#ifndef _TOH_
 	/* If requested, let ssh continue in the background. */
 	if (fork_after_authentication_flag)
 		if (daemon(1, 1) < 0)
 			fatal("daemon() failed: %.200s", strerror(errno));
+#endif /* _TOH_ */
 
 	/*
 	 * If a command was specified on the command line, execute the
 	 * command now. Otherwise request the server to start a shell.
 	 */
 	if (buffer_len(&command) > 0) {
+#ifndef _TOH_
 		int len = buffer_len(&command);
 		if (len > 900)
 			len = 900;
@@ -1008,6 +1122,9 @@ ssh_session(void)
 		packet_put_string(buffer_ptr(&command), buffer_len(&command));
 		packet_send();
 		packet_write_wait();
+#else /* _TOH_ */
+        /* never happens. */
+#endif /* _TOH_ */
 	} else {
 		debug("Requesting shell.");
 		packet_start(SSH_CMSG_EXEC_SHELL);
@@ -1060,6 +1177,7 @@ client_global_request_reply_fwd(int type, u_int32_t seq, void *ctxt)
 	}
 }
 
+#ifndef _TOH_
 static void
 ssh_control_listener(void)
 {
@@ -1101,6 +1219,7 @@ ssh_control_listener(void)
 
 	set_nonblock(control_fd);
 }
+#endif /* _TOH_ */
 
 /* request pty/x11/agent/tcpfwd/shell for channel */
 static void
@@ -1109,7 +1228,7 @@ ssh_session2_setup(int id, void *arg)
 	extern char **environ;
 	const char *display;
 	int interactive = tty_flag;
-
+#ifndef _TOH_
 	display = getenv("DISPLAY");
 	if (options.forward_x11 && display != NULL) {
 		char *proto, *data;
@@ -1122,6 +1241,7 @@ ssh_session2_setup(int id, void *arg)
 		interactive = 1;
 		/* XXX wait for reply */
 	}
+#endif /* _TOH_ */
 
 	check_agent_present();
 	if (options.forward_agent) {
@@ -1130,8 +1250,13 @@ ssh_session2_setup(int id, void *arg)
 		packet_send();
 	}
 
+#ifndef _TOH_
 	client_session2_setup(id, tty_flag, subsystem_flag, getenv("TERM"),
 	    NULL, fileno(stdin), &command, environ, &ssh_subsystem_reply);
+#else /* _TOH_ */
+	client_session2_setup(id, tty_flag, subsystem_flag, NULL,
+	    fileno(stdin), &command, environ, &ssh_subsystem_reply);
+#endif /* _TOH_ */
 
 	packet_set_interactive(interactive);
 }
@@ -1193,6 +1318,7 @@ ssh_session2(void)
 	if (!no_shell_flag || (datafellows & SSH_BUG_DUMMYCHAN))
 		id = ssh_session2_open();
 
+#ifndef _TOH_
 	/* Execute a local command */
 	if (options.local_command != NULL &&
 	    options.permit_local_command)
@@ -1205,6 +1331,7 @@ ssh_session2(void)
 	if (fork_after_authentication_flag)
 		if (daemon(1, 1) < 0)
 			fatal("daemon() failed: %.200s", strerror(errno));
+#endif /* _TOH_ */
 
 	return client_loop(tty_flag, tty_flag ?
 	    options.escape_char : SSH_ESCAPECHAR_NONE, id);
@@ -1240,18 +1367,26 @@ load_public_identity_files(void)
 		xfree(keys);
 	}
 #endif /* SMARTCARD */
+#ifndef _TOH_
 	if ((pw = getpwuid(original_real_uid)) == NULL)
 		fatal("load_public_identity_files: getpwuid failed");
 	if (gethostname(thishost, sizeof(thishost)) == -1)
 		fatal("load_public_identity_files: gethostname: %s",
 		    strerror(errno));
+#endif /* _TOH_ */
 	for (; i < options.num_identity_files; i++) {
+#ifndef _TOH_
 		cp = tilde_expand_filename(options.identity_files[i],
 		    original_real_uid);
 		filename = percent_expand(cp, "d", pw->pw_dir,
 		    "u", pw->pw_name, "l", thishost, "h", host,
 		    "r", options.user, (char *)NULL);
 		xfree(cp);
+#else /* _TOH_ */
+        filename = xmalloc(strlen(g_configFolder) + strlen("\\")
+                           + strlen(options.identity_files[i]) + 1);
+        sprintf(filename, "%s\\%s", g_configFolder, options.identity_files[i]);
+#endif /* _TOH_ */
 		public = key_load_public(filename, NULL);
 		debug("identity file %s type %d", filename,
 		    public ? public->type : -1);
@@ -1261,6 +1396,7 @@ load_public_identity_files(void)
 	}
 }
 
+#ifndef _TOH_
 static void
 control_client_sighandler(int signo)
 {
@@ -1273,6 +1409,7 @@ control_client_sigrelay(int signo)
 	if (control_server_pid > 1)
 		kill(control_server_pid, signo);
 }
+#endif /* _TOH_ */
 
 static int
 env_permitted(char *env)
@@ -1293,6 +1430,7 @@ env_permitted(char *env)
 	return (0);
 }
 
+#ifndef _TOH_
 static void
 control_client(const char *path)
 {
@@ -1487,3 +1625,33 @@ control_client(const char *path)
 
 	exit(exitval[0]);
 }
+#endif /* _TOH_ */
+
+#ifdef _TOH_
+void clear_options()
+{
+    xfree(options.hostname);
+    xfree(options.user);
+    xfree(options.user_hostfile);
+    xfree(options.user_hostfile2);
+
+    /* forwarding options will be cleard before next login
+     * in clear_forwardings() in readconf.c
+     * but I do this here anyway.
+     */
+    {
+        int i;
+
+        for (i = 0; i < options.num_local_forwards; i++) {
+            xfree(options.local_forwards[i].listen_host);
+            xfree(options.local_forwards[i].connect_host);
+        }
+        options.num_local_forwards = 0;
+        for (i = 0; i < options.num_remote_forwards; i++) {
+            xfree(options.remote_forwards[i].listen_host);
+            xfree(options.remote_forwards[i].connect_host);
+        }
+        options.num_remote_forwards = 0;
+    }
+}
+#endif /* _TOH_ */

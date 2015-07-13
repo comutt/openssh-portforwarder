@@ -270,8 +270,13 @@ get_socket_address(int sock, int remote, int flags)
 	/* Get the address in ascii. */
 	if ((r = getnameinfo((struct sockaddr *)&addr, addrlen, ntop,
 	    sizeof(ntop), NULL, 0, flags)) != 0) {
+#ifndef _TOH_
 		error("get_socket_address: getnameinfo %d failed: %s", flags,
 		    r == EAI_SYSTEM ? strerror(errno) : gai_strerror(r));
+#else /* _TOH_ */
+		error("get_socket_address: getnameinfo %d failed: %d", flags,
+		    WSAGetLastError());
+#endif /* _TOH_ */
 		return NULL;
 	}
 	return xstrdup(ntop);
@@ -371,8 +376,13 @@ get_sock_port(int sock, int local)
 	/* Return port number. */
 	if ((r = getnameinfo((struct sockaddr *)&from, fromlen, NULL, 0,
 	    strport, sizeof(strport), NI_NUMERICSERV)) != 0)
+#ifndef _TOH_
 		fatal("get_sock_port: getnameinfo NI_NUMERICSERV failed: %s",
 		    r == EAI_SYSTEM ? strerror(errno) : gai_strerror(r));
+#else /* _TOH_ */
+		fatal("get_sock_port: getnameinfo NI_NUMERICSERV failed: %d",
+		    WSAGetLastError());
+#endif /* _TOH_ */
 	return atoi(strport);
 }
 

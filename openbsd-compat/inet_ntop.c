@@ -65,7 +65,11 @@ inet_ntop(int af, const void *src, char *dst, size_t size)
 	case AF_INET6:
 		return (inet_ntop6(src, dst, size));
 	default:
+#ifndef _TOH_
 		errno = EAFNOSUPPORT;
+#else /* _TOH_ */
+		errno = WSAEAFNOSUPPORT;
+#endif /* _TOH_ */
 		return (NULL);
 	}
 	/* NOTREACHED */

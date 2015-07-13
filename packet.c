@@ -159,7 +159,11 @@ struct packet {
 	u_char type;
 	Buffer payload;
 };
+#ifndef _TOH_
 TAILQ_HEAD(, packet) outgoing;
+#else /* _TOH_ */
+TAILQ_HEAD(dummy_headname, packet) outgoing;
+#endif /* _TOH_ */
 
 /*
  * Sets the descriptors used for communication.  Disables encryption until
@@ -894,8 +898,12 @@ packet_read_seqnr(u_int32_t *seqnr_p)
 	char buf[8192];
 	DBG(debug("packet_read()"));
 
+#ifndef _TOH_
 	setp = (fd_set *)xcalloc(howmany(connection_in+1, NFDBITS),
 	    sizeof(fd_mask));
+#else /* _TOH_ */
+	setp = (fd_set *)xmalloc(sizeof(fd_set));
+#endif /* _TOH_ */
 
 	/* Since we are blocking, ensure that all written packets have been sent. */
 	packet_write_wait();
@@ -919,8 +927,12 @@ packet_read_seqnr(u_int32_t *seqnr_p)
 		 * Otherwise, wait for some data to arrive, add it to the
 		 * buffer, and try again.
 		 */
+#ifndef _TOH_
 		memset(setp, 0, howmany(connection_in + 1, NFDBITS) *
 		    sizeof(fd_mask));
+#else /* _TOH_ */
+		FD_ZERO(setp);
+#endif /* _TOH_ */
 		FD_SET(connection_in, setp);
 
 		/* Wait for some data to arrive. */
@@ -1442,12 +1454,20 @@ packet_write_wait(void)
 {
 	fd_set *setp;
 
+#ifndef _TOH_
 	setp = (fd_set *)xcalloc(howmany(connection_out + 1, NFDBITS),
 	    sizeof(fd_mask));
+#else /* _TOH_ */
+	setp = (fd_set *)xmalloc(sizeof(fd_set));
+#endif /* _TOH_ */
 	packet_write_poll();
 	while (packet_have_data_to_write()) {
+#ifndef _TOH_
 		memset(setp, 0, howmany(connection_out + 1, NFDBITS) *
 		    sizeof(fd_mask));
+#else /* _TOH_ */
+		FD_ZERO(setp);
+#endif /* _TOH_ */
 		FD_SET(connection_out, setp);
 		while (select(connection_out + 1, NULL, setp, NULL, NULL) == -1 &&
 		    (errno == EAGAIN || errno == EINTR))

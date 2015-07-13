@@ -1181,7 +1181,11 @@ static void
 channel_post_x11_listener(Channel *c, fd_set *readset, fd_set *writeset)
 {
 	Channel *nc;
+#ifndef _TOH_
 	struct sockaddr addr;
+#else /* _TOH_ */
+	struct sockaddr_storage addr;
+#endif /* _TOH_ */
 	int newsock;
 	socklen_t addrlen;
 	char buf[16384], *remote_ipaddr;
@@ -1190,7 +1194,11 @@ channel_post_x11_listener(Channel *c, fd_set *readset, fd_set *writeset)
 	if (FD_ISSET(c->sock, readset)) {
 		debug("X11 connection requested.");
 		addrlen = sizeof(addr);
+#ifndef _TOH_
 		newsock = accept(c->sock, &addr, &addrlen);
+#else /* _TOH_ */
+		newsock = accept(c->sock, (struct sockaddr *)&addr, &addrlen);
+#endif /* _TOH_ */
 		if (c->single_connection) {
 			debug2("single_connection: closing X11 listener.");
 			channel_close_fd(&c->sock);
@@ -1307,7 +1315,11 @@ static void
 channel_post_port_listener(Channel *c, fd_set *readset, fd_set *writeset)
 {
 	Channel *nc;
+#ifndef _TOH_
 	struct sockaddr addr;
+#else /* _TOH_ */
+	struct sockaddr_storage addr;
+#endif /* _TOH_ */
 	int newsock, nextstate;
 	socklen_t addrlen;
 	char *rtype;
@@ -1331,7 +1343,11 @@ channel_post_port_listener(Channel *c, fd_set *readset, fd_set *writeset)
 		}
 
 		addrlen = sizeof(addr);
+#ifndef _TOH_
 		newsock = accept(c->sock, &addr, &addrlen);
+#else /* _TOH_ */
+		newsock = accept(c->sock, (struct sockaddr *)&addr, &addrlen);
+#endif /* _TOH_ */
 		if (newsock < 0) {
 			error("accept: %.100s", strerror(errno));
 			return;
@@ -1366,12 +1382,20 @@ channel_post_auth_listener(Channel *c, fd_set *readset, fd_set *writeset)
 {
 	Channel *nc;
 	int newsock;
+#ifndef _TOH_
 	struct sockaddr addr;
+#else /* _TOH_ */
+	struct sockaddr_storage addr;
+#endif /* _TOH_ */
 	socklen_t addrlen;
 
 	if (FD_ISSET(c->sock, readset)) {
 		addrlen = sizeof(addr);
+#ifndef _TOH_
 		newsock = accept(c->sock, &addr, &addrlen);
+#else /* _TOH_ */
+		newsock = accept(c->sock, (struct sockaddr *)&addr, &addrlen);
+#endif /* _TOH_ */
 		if (newsock < 0) {
 			error("accept from auth socket: %.100s", strerror(errno));
 			return;
@@ -1493,7 +1517,9 @@ channel_handle_rfd(Channel *c, fd_set *readset, fd_set *writeset)
 static int
 channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset)
 {
+#ifndef _TOH_
 	struct termios tio;
+#endif /* _TOH_ */
 	u_char *data = NULL, *buf;
 	u_int dlen;
 	int len;
@@ -1557,6 +1583,7 @@ channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset)
 			}
 			return -1;
 		}
+#ifndef _TOH_
 		if (compat20 && c->isatty && dlen >= 1 && buf[0] != '\r') {
 			if (tcgetattr(c->wfd, &tio) == 0 &&
 			    !(tio.c_lflag & ECHO) && (tio.c_lflag & ICANON)) {
@@ -1570,6 +1597,7 @@ channel_handle_wfd(Channel *c, fd_set *readset, fd_set *writeset)
 				packet_send();
 			}
 		}
+#endif /* _TOH_ */
 		buffer_consume(&c->output, len);
 		if (compat20 && len > 0) {
 			c->local_consumed += len;
@@ -1822,7 +1850,21 @@ channel_handler(chan_fn *ftab[], fd_set *readset, fd_set *writeset)
 		if (c == NULL)
 			continue;
 		if (ftab[c->type] != NULL)
+#ifndef _TOH_
 			(*ftab[c->type])(c, readset, writeset);
+#else /* _TOH_ */
+        {
+            if (!strcmp(c->ctype, "session")) {
+                /* this channel is for stdin, stdout, stderr.
+                 * DO NOT SET FOR SELECT!!!
+                 */
+                continue;
+            }
+            else {
+				(*ftab[c->type])(c, readset, writeset);
+            }
+        }
+#endif /* _TOH_ */
 		channel_garbage_collect(c);
 	}
 }
@@ -1835,6 +1877,7 @@ void
 channel_prepare_select(fd_set **readsetp, fd_set **writesetp, int *maxfdp,
     u_int *nallocp, int rekeying)
 {
+#ifndef _TOH_
 	u_int n, sz, nfdset;
 
 	n = MAX(*maxfdp, channel_max_fd);
@@ -1854,6 +1897,21 @@ channel_prepare_select(fd_set **readsetp, fd_set **writesetp, int *maxfdp,
 	*maxfdp = n;
 	memset(*readsetp, 0, sz);
 	memset(*writesetp, 0, sz);
+#else /* _TOH_ */
+    if (*readsetp != NULL) {
+        xfree(*readsetp);
+        *readsetp = NULL;
+    }
+    *readsetp = (fd_set*)xmalloc(sizeof(fd_set));
+    FD_ZERO(*readsetp);
+
+    if (*writesetp != NULL) {
+        xfree(*writesetp);
+        *writesetp = NULL;
+    }
+    *writesetp = (fd_set*)xmalloc(sizeof(fd_set));
+    FD_ZERO(*writesetp);
+#endif /* _TOH_ */
 
 	if (!rekeying)
 		channel_handler(channel_pre, *readsetp, *writesetp);
@@ -2754,7 +2812,11 @@ connect_to(const char *host, u_short port)
 		if (set_nonblock(sock) == -1)
 			fatal("%s: set_nonblock(%d)", __func__, sock);
 		if (connect(sock, ai->ai_addr, ai->ai_addrlen) < 0 &&
+#ifndef _TOH_
 		    errno != EINPROGRESS) {
+#else /* _TOH_ */
+		    WSAGetLastError() != WSAEINPROGRESS) {
+#endif /* _TOH_ */
 			error("connect_to %.100s port %s: %.100s", ntop, strport,
 			    strerror(errno));
 			close(sock);
@@ -2822,6 +2884,7 @@ channel_connect_to(const char *host, u_short port)
 	return connect_to(host, port);
 }
 
+#ifndef _TOH_
 void
 channel_send_window_changes(void)
 {
@@ -2842,7 +2905,9 @@ channel_send_window_changes(void)
 		packet_send();
 	}
 }
+#endif /* _TOH_ */
 
+#ifndef _TOH_
 /* -- X11 forwarding */
 
 /*
@@ -3125,6 +3190,7 @@ x11_input_open(int type, u_int32_t seq, void *ctxt)
 	}
 	packet_send();
 }
+#endif /* _TOH_ */
 
 /* dummy protocol handler that denies SSH-1 requests (agent/x11) */
 /* ARGSUSED */
@@ -3150,6 +3216,7 @@ deny_input_open(int type, u_int32_t seq, void *ctxt)
 	packet_send();
 }
 
+#ifndef _TOH_
 /*
  * Requests forwarding of X11 connections, generates fake authentication
  * data, and enables authentication spoofing.
@@ -3222,6 +3289,7 @@ x11_request_forwarding_with_spoofing(int client_session_id, const char *disp,
 	packet_write_wait();
 	xfree(new_data);
 }
+#endif /* _TOH_ */
 
 
 /* -- agent forwarding */

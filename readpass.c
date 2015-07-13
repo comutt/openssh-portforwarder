@@ -46,6 +46,10 @@
 #include "ssh.h"
 #include "uidswap.h"
 
+#ifdef _TOH_
+extern HWND g_hWnd;
+#endif /* _TOH_ */
+#ifndef _TOH_
 static char *
 ssh_askpass(char *askpass, const char *msg)
 {
@@ -103,6 +107,7 @@ ssh_askpass(char *askpass, const char *msg)
 	memset(buf, 0, sizeof(buf));
 	return pass;
 }
+#endif /* _TOH_ */
 
 /*
  * Reads a passphrase from /dev/tty with echo turned off/on.  Returns the
@@ -113,6 +118,7 @@ ssh_askpass(char *askpass, const char *msg)
 char *
 read_passphrase(const char *prompt, int flags)
 {
+#ifndef _TOH_
 	char *askpass = NULL, *ret, buf[1024];
 	int rppflags, use_askpass = 0, ttyfd;
 
@@ -159,6 +165,15 @@ read_passphrase(const char *prompt, int flags)
 	ret = xstrdup(buf);
 	memset(buf, 'x', sizeof buf);
 	return ret;
+#else /* _TOH_ */
+    askpassinfo info;
+    info.prompt = prompt;
+    SendMessage(g_hWnd, MSG_GET_PASSPHRASE, (WPARAM)&info, 0);
+    if (info.result == NULL) {
+        fatal("Canceled by user.");
+    }
+    return info.result;
+#endif /* _TOH_ */
 }
 
 int

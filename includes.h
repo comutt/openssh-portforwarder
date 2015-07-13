@@ -16,6 +16,10 @@
 #ifndef INCLUDES_H
 #define INCLUDES_H
 
+#ifdef _TOH_
+#include "PortForwarder_inc.h"
+#include <ws2tcpip.h>
+#endif /* _TOH_ */
 #include "config.h"
 
 #define _GNU_SOURCE /* activate extra prototypes for glibc */
@@ -92,6 +96,7 @@
 #ifdef HAVE_SYS_STAT_H
 # include <sys/stat.h> /* For S_* constants and macros */
 #endif
+#ifndef _TOH_
 #ifdef HAVE_SYS_SYSMACROS_H
 # include <sys/sysmacros.h> /* For MIN, MAX, etc */
 #endif
@@ -139,6 +144,7 @@
 #ifdef HAVE_LIBUTIL_H
 # include <libutil.h> /* Openpty on FreeBSD at least */
 #endif
+#endif /* _TOH_ */
 
 #if defined(KRB5) && defined(USE_AFS)
 # include <krb5.h>

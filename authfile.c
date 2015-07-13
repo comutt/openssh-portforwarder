@@ -36,6 +36,9 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef _TOH_
+#include <io.h>
+#endif /* _TOH_ */
 #include "includes.h"
 
 #include <sys/types.h>
@@ -264,7 +267,11 @@ key_load_public_rsa1(int fd, const char *filename, char **commentp)
 	buffer_init(&buffer);
 	cp = buffer_append_space(&buffer, len);
 
+#ifndef _TOH_
 	if (atomicio(read, fd, cp, len) != len) {
+#else /* _TOH_ */
+	if (atomicio(_read, fd, cp, len) != len) {
+#endif /* _TOH_ */
 		debug("Read from key file %.200s failed: %.100s", filename,
 		    strerror(errno));
 		buffer_free(&buffer);
@@ -312,7 +319,11 @@ key_load_public_type(int type, const char *filename, char **commentp)
 	int fd;
 
 	if (type == KEY_RSA1) {
+#ifndef _TOH_
 		fd = open(filename, O_RDONLY);
+#else /* _TOH_ */
+		fd = open(filename, O_RDONLY | O_BINARY);
+#endif /* _TOH_ */
 		if (fd < 0)
 			return NULL;
 		pub = key_load_public_rsa1(fd, filename, commentp);
@@ -359,7 +370,11 @@ key_load_private_rsa1(int fd, const char *filename, const char *passphrase,
 	buffer_init(&buffer);
 	cp = buffer_append_space(&buffer, len);
 
+#ifndef _TOH_
 	if (atomicio(read, fd, cp, len) != len) {
+#else /* _TOH_ */
+	if (atomicio(_read, fd, cp, len) != len) {
+#endif /* _TOH_ */
 		debug("Read from key file %.200s failed: %.100s", filename,
 		    strerror(errno));
 		buffer_free(&buffer);
@@ -532,6 +547,7 @@ key_perm_ok(int fd, const char *filename)
 #ifdef HAVE_CYGWIN
 	if (check_ntsec(filename))
 #endif
+#ifndef _TOH_
 	if ((st.st_uid == getuid()) && (st.st_mode & 077) != 0) {
 		error("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 		error("@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @");
@@ -542,6 +558,7 @@ key_perm_ok(int fd, const char *filename)
 		error("This private key will be ignored.");
 		return 0;
 	}
+#endif /* _TOH_ */
 	return 1;
 }
 
@@ -551,7 +568,11 @@ key_load_private_type(int type, const char *filename, const char *passphrase,
 {
 	int fd;
 
+#ifndef _TOH_
 	fd = open(filename, O_RDONLY);
+#else /* _TOH_ */
+    fd = open(filename, O_RDONLY | O_BINARY);
+#endif /* _TOH_ */
 	if (fd < 0)
 		return NULL;
 	if (!key_perm_ok(fd, filename)) {
@@ -587,7 +608,11 @@ key_load_private(const char *filename, const char *passphrase,
 	Key *pub, *prv;
 	int fd;
 
+#ifndef _TOH_
 	fd = open(filename, O_RDONLY);
+#else /* _TOH_ */
+    fd = open(filename, O_RDONLY | O_BINARY);
+#endif /* _TOH_ */
 	if (fd < 0)
 		return NULL;
 	if (!key_perm_ok(fd, filename)) {

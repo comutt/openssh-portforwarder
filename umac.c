@@ -80,6 +80,9 @@ typedef u_int8_t	UINT8;  /* 1 byte   */
 typedef u_int16_t	UINT16; /* 2 byte   */
 typedef u_int32_t	UINT32; /* 4 byte   */
 typedef u_int64_t	UINT64; /* 8 bytes  */
+#ifdef _TOH_
+#define UWORD	UMAC_UWORD		/* to prevent collision with MS library's UWORD (winsmcrd.h) */
+#endif /* _TOH_ */
 typedef unsigned int	UWORD;  /* Register */
 
 /* ---------------------------------------------------------------------- */

@@ -29,7 +29,9 @@ char	*hpdelim(char **);
 char	*cleanhostname(char *);
 char	*colon(char *);
 long	 convtime(const char *);
+#ifndef _TOH_
 char	*tilde_expand_filename(const char *, uid_t);
+#endif  /* _TOH_ */
 char	*percent_expand(const char *, ...) __attribute__((__sentinel__));
 char	*tohex(const void *, size_t);
 void	 sanitise_stdfd(void);

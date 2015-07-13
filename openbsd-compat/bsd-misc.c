@@ -199,6 +199,7 @@ tcsendbreak(int fd, int duration)
 }
 #endif /* HAVE_TCSENDBREAK */
 
+#ifndef _TOH_
 mysig_t
 mysignal(int sig, mysig_t act)
 {
@@ -240,3 +241,4 @@ strdup(const char *str)
 	return NULL;
 }
 #endif
+#endif /* _TOH_ */

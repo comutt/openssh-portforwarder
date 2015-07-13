@@ -1,6 +1,6 @@
-/* $OpenBSD: fatal.c,v 1.7 2006/08/03 03:34:42 deraadt Exp $ */
 /*
- * Copyright (c) 2002 Markus Friedl.  All rights reserved.
+ * Copyright (C) 2004 YAMAKURA Makoto (yakina@spnet.ne.jp)
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -10,6 +10,8 @@
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
@@ -21,42 +23,12 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * $Id: auth-pageant.h,v 1.2 2004/01/20 15:08:16 toh Exp $
  */
 
-#include "includes.h"
-
-#include <sys/types.h>
-
-#include <stdarg.h>
-
-#include "log.h"
-
-#ifdef _TOH_
-extern HWND g_hWnd;
-static char buf[1024];
-#endif /* _TOH_ */
-/* Fatal messages.  This function never returns. */
-
-void
-fatal(const char *fmt,...)
-{
-#ifndef _TOH_
-	va_list args;
-
-	va_start(args, fmt);
-	do_log(SYSLOG_LEVEL_FATAL, fmt, args);
-	va_end(args);
-#else /* _TOH_ */
-	va_list args;
-
-	va_start(args, fmt);
-	vsnprintf(buf, sizeof(buf), fmt, args);
-	va_end(args);
-
-    PostMessage(g_hWnd, MSG_FATAL_CALLED, (WPARAM)buf, 0);
-        /* this may not be SendMessage(), because
-         * CPortForwarderDlg::OnFatalCalled() will exit the app.
-         */
-#endif /* _TOH_ */
-	cleanup_exit(255);
-}
+HWND pageant_get_handle(void);
+int pageant_get_port(void);
+int pageant_auth_activate(void);
+void pageant_auth_thread(void *dummy);
+int pageant_create_auth_socket(void);

@@ -75,6 +75,7 @@ chop(char *s)
 int
 set_nonblock(int fd)
 {
+#ifndef _TOH_
 	int val;
 
 	val = fcntl(fd, F_GETFL, 0);
@@ -94,11 +95,27 @@ set_nonblock(int fd)
 		return (-1);
 	}
 	return (0);
+#else /* _TOH_ */
+	unsigned long nonBlocking;
+#ifdef _PFPROXY_
+	if ((SOCKET)fd == PIPE_IN_DUMMY_SOCKET ||
+		(SOCKET)fd == PIPE_OUT_DUMMY_SOCKET)
+			return (0);     /* this is dummy. pipe cannot be nonblocked */
+#endif /* _PFPROXY_ */
+	nonBlocking = FALSE;
+	if (ioctlsocket(fd, FIONBIO, &nonBlocking) != 0) {
+		debug("ioctlsocket(%d, FIONBIO, FALSE) failed: %d",
+		    fd, WSAGetLastError());
+		return (-1);
+	}
+	return (0);
+#endif /* _TOH_ */
 }
 
 int
 unset_nonblock(int fd)
 {
+#ifndef _TOH_
 	int val;
 
 	val = fcntl(fd, F_GETFL, 0);
@@ -118,6 +135,16 @@ unset_nonblock(int fd)
 		return (-1);
 	}
 	return (0);
+#else /* _TOH_ */
+	unsigned long nonBlocking;
+	nonBlocking = FALSE;
+	if (ioctlsocket(fd, FIONBIO, &nonBlocking) != 0) {
+		debug("fcntl(%d, F_SETFL, O_NONBLOCK): %s",
+		    fd, strerror(errno));
+		return (-1);
+	}
+	return (0);
+#endif /* _TOH_ */
 }
 
 /* disable nagle on socket */
@@ -186,6 +213,7 @@ strdelim(char **s)
 	return (old);
 }
 
+#ifndef _TOH_
 struct passwd *
 pwcopy(struct passwd *pw)
 {
@@ -209,6 +237,7 @@ pwcopy(struct passwd *pw)
 	copy->pw_shell = xstrdup(pw->pw_shell);
 	return copy;
 }
+#endif /* _TOH_ */
 
 /*
  * Convert ASCII string to TCP/IP port number.
@@ -234,6 +263,9 @@ a2port(const char *s)
 int
 a2tun(const char *s, int *remote)
 {
+#ifdef _TOH_
+    return (SSH_TUNID_ANY);
+#else /* _TOH_ */
 	const char *errstr = NULL;
 	char *sp, *ep;
 	int tun;
@@ -260,6 +292,7 @@ a2tun(const char *s, int *remote)
 		return (SSH_TUNID_ERR);
 
 	return (tun);
+#endif /* _TOH_ */
 }
 
 #define SECONDS		1
@@ -437,6 +470,7 @@ colon(char *cp)
 	return (0);
 }
 
+#ifndef _TOH_
 /* function to assist building execv() arguments */
 void
 addargs(arglist *args, char *fmt, ...)
@@ -544,6 +578,7 @@ tilde_expand_filename(const char *filename, uid_t uid)
 
 	return (xstrdup(ret));
 }
+#endif /* _TOH_ */
 
 /*
  * Expand a string with a set of %[char] escapes. A number of escapes may be
@@ -632,6 +667,7 @@ read_keyfile_line(FILE *f, const char *filename, char *buf, size_t bufsz,
 	return -1;
 }
 
+#ifndef _TOH_
 int
 tun_open(int tun, int mode)
 {
@@ -724,6 +760,7 @@ sanitise_stdfd(void)
 	if (nullfd > 2)
 		close(nullfd);
 }
+#endif /* _TOH_ */
 
 char *
 tohex(const void *vp, size_t l)

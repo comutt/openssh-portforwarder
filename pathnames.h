@@ -64,17 +64,29 @@
  * readable by anyone except the user him/herself, though this does not
  * contain anything particularly secret.
  */
+#ifndef _TOH_
 #define _PATH_SSH_USER_HOSTFILE		"~/.ssh/known_hosts"
 /* backward compat for protocol 2 */
 #define _PATH_SSH_USER_HOSTFILE2	"~/.ssh/known_hosts2"
+#else /* _TOH_ */
+#define _PATH_SSH_USER_HOSTFILE		"known_hosts"
+/* backward compat for protocol 2 */
+#define _PATH_SSH_USER_HOSTFILE2	"known_hosts2"
+#endif /* _TOH_ */
 
 /*
  * Name of the default file containing client-side authentication key. This
  * file should only be readable by the user him/herself.
  */
+#ifndef _TOH_
 #define _PATH_SSH_CLIENT_IDENTITY	".ssh/identity"
 #define _PATH_SSH_CLIENT_ID_DSA		".ssh/id_dsa"
 #define _PATH_SSH_CLIENT_ID_RSA		".ssh/id_rsa"
+#else /* _TOH_ */
+#define _PATH_SSH_CLIENT_IDENTITY	"identity"
+#define _PATH_SSH_CLIENT_ID_DSA		"id_dsa"
+#define _PATH_SSH_CLIENT_ID_RSA		"id_rsa"
+#endif /* _TOH_ */
 
 /*
  * Configuration file in user\'s home directory.  This file need not be

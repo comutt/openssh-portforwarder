@@ -52,6 +52,18 @@
 #include "xmalloc.h"
 #include "log.h"
 
+#ifdef _TOH_
+#ifdef _PFVERBOSE_
+#include <windows.h>        /* for OutputDebugString() */
+#endif /* _PFVERBOSE */
+extern HWND g_hWnd;
+static char buf[1024];
+#ifdef _LOG_
+void MyLog(LPCTSTR message);
+#endif /* _LOG_ */
+#endif /* _TOH_ */
+
+#ifndef _TOH_
 static LogLevel log_level = SYSLOG_LEVEL_INFO;
 static int log_on_stderr = 1;
 static int log_facility = LOG_AUTH;
@@ -84,6 +96,7 @@ static struct {
 	{ "LOCAL7",	SYSLOG_FACILITY_LOCAL7 },
 	{ NULL,		SYSLOG_FACILITY_NOT_SET }
 };
+#endif /* _TOH_ */
 
 static struct {
 	const char *name;
@@ -102,6 +115,7 @@ static struct {
 	{ NULL,		SYSLOG_LEVEL_NOT_SET }
 };
 
+#ifndef _TOH_
 SyslogFacility
 log_facility_number(char *name)
 {
@@ -113,6 +127,7 @@ log_facility_number(char *name)
 				return log_facilities[i].val;
 	return SYSLOG_FACILITY_NOT_SET;
 }
+#endif /* _TOH_ */
 
 LogLevel
 log_level_number(char *name)
@@ -131,11 +146,26 @@ log_level_number(char *name)
 void
 error(const char *fmt,...)
 {
+#ifndef _TOH_
 	va_list args;
 
 	va_start(args, fmt);
 	do_log(SYSLOG_LEVEL_ERROR, fmt, args);
 	va_end(args);
+#else /* _TOH_ */
+	va_list args;
+    msgboxinfo info;
+
+	va_start(args, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+    info.caption = APP_NAME;
+    info.message = buf;
+    info.type = MB_OK | MB_ICONERROR;
+
+    SendMessage(g_hWnd, MSG_SHOW_MESSAGEBOX, (WPARAM)&info, 0);
+#endif /* _TOH_ */
 }
 
 void
@@ -157,11 +187,25 @@ sigdie(const char *fmt,...)
 void
 logit(const char *fmt,...)
 {
+#ifndef _TOH_
 	va_list args;
 
 	va_start(args, fmt);
 	do_log(SYSLOG_LEVEL_INFO, fmt, args);
 	va_end(args);
+#else /* _TOH_ */
+	va_list args;
+    msgboxinfo info;
+
+	va_start(args, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, args);
+	va_end(args);
+
+    info.caption = APP_NAME;
+    info.message = buf;
+    info.type = MB_OK | MB_ICONINFORMATION;
+    SendMessage(g_hWnd, MSG_SHOW_MESSAGEBOX, (WPARAM)&info, 0);
+#endif /* _TOH_ */
 }
 
 /* More detailed messages (information that does not need to go to the log). */
@@ -208,6 +252,7 @@ debug3(const char *fmt,...)
 	va_end(args);
 }
 
+#ifndef _TOH_
 /*
  * Initialize the log.
  */
@@ -301,12 +346,14 @@ log_init(char *av0, LogLevel level, SyslogFacility facility, int on_stderr)
 	closelog();
 #endif
 }
+#endif /* _TOH_ */
 
 #define MSGBUFSIZ 1024
 
 void
 do_log(LogLevel level, const char *fmt, va_list args)
 {
+#ifndef _TOH_
 #if defined(HAVE_OPENLOG_R) && defined(SYSLOG_DATA_INIT)
 	struct syslog_data sdata = SYSLOG_DATA_INIT;
 #endif
@@ -376,4 +423,149 @@ do_log(LogLevel level, const char *fmt, va_list args)
 #endif
 	}
 	errno = saved_errno;
+#else /* _TOH_ */
+#if defined(_LOG_) || defined(_PFVERBOSE_)
+	char msgbuf[MSGBUFSIZ];
+	char fmtbuf[MSGBUFSIZ];
+	char *txt = NULL;
+
+	switch (level) {
+	case SYSLOG_LEVEL_FATAL:
+        txt = "fatal";
+		break;
+	case SYSLOG_LEVEL_ERROR:
+        txt = "error";
+		break;
+	case SYSLOG_LEVEL_INFO:
+        txt = "info";
+		break;
+	case SYSLOG_LEVEL_VERBOSE:
+        txt = "verbose";
+		break;
+	case SYSLOG_LEVEL_DEBUG1:
+		txt = "debug1";
+		break;
+	case SYSLOG_LEVEL_DEBUG2:
+		txt = "debug2";
+		break;
+	case SYSLOG_LEVEL_DEBUG3:
+		txt = "debug3";
+		break;
+	default:
+		txt = "internal error";
+		break;
+	}
+    snprintf(fmtbuf, sizeof(fmtbuf), "%s: %s", txt, fmt);
+    vsnprintf(msgbuf, sizeof(msgbuf), fmtbuf, args);
+/*
+	strnvis(fmtbuf, msgbuf, sizeof(fmtbuf), VIS_SAFE|VIS_OCTAL);
+    snprintf(msgbuf, sizeof msgbuf, "%s\r\n", fmtbuf);
+*/
+#ifdef _LOG_
+    MyLog(msgbuf);
+#endif /* _LOG_ */
+#ifdef _PFVERBOSE_
+  OutputDebugString(msgbuf);
+  OutputDebugString("\n");
+#endif /* _PFVERBOSE_ */
+#endif /* _LOG_ || _PFVERBOSE_ */
+#endif /* _TOH_ */
 }
+
+#ifdef _TOH_
+#if 0 /* clear_fatal_cleanups() is not used, for now */
+void clear_options();
+void EVP_cleanup();
+void ERR_free_strings();
+void CRYPTO_cleanup_all_ex_data();
+
+#include "compat.h"
+#include "cipher.h"
+#include "key.h"
+#include "kex.h"
+extern Kex* xxx_kex;
+extern Newkeys *current_keys[];
+
+void clear_fatal_cleanups()
+{
+    /* this clean up could be already done?  better not do this here
+	struct fatal_cleanup *cu, *next_cu;
+
+	for (cu = fatal_cleanups; cu; cu = next_cu) {
+		next_cu = cu->next;
+		(*cu->proc) (cu->context);
+        xfree(cu);
+	}
+    fatal_cleanups = NULL;
+    */
+
+    /* clena up for OpenSSL */
+    CRYPTO_cleanup_all_ex_data();
+        /* for RSA_new() and DSA_new(), called in key_new().
+         * RSA_free() and DSA_new() don't clean up completely.
+         */
+    EVP_cleanup();
+    ERR_free_strings();
+        /* those two above are needed for SSLeay_add_all_algorithms()
+         * and ERR_load_crypto_strings() in main().
+         */
+
+    /* clean up for options */
+    clear_options();
+
+    /* clean up for some global variables */
+
+    /* client_version_string and server_version_strings
+     * should be cleared as xxx_kex->client_version_string
+     * and xxx_kex->server_version_string.
+     * DO NOT FREE!
+     */
+    /*
+    if (client_version_string) {
+        xfree(client_version_string);
+        client_version_string = NULL;
+    }
+    if (server_version_string) {
+        xfree(server_version_string);
+        server_version_string = NULL;
+    }
+    */
+
+    /* clean up for kex */
+    if (compat20) {
+        if (xxx_kex->session_id) {
+            xfree(xxx_kex->session_id);
+            xxx_kex->session_id = NULL;
+            xxx_kex->session_id_len = 0;
+        }
+        buffer_free(&xxx_kex->my);
+        buffer_free(&xxx_kex->peer);
+        if (xxx_kex->client_version_string) {
+            xfree(xxx_kex->client_version_string);
+            xxx_kex->client_version_string = NULL;
+        }
+        if (xxx_kex->server_version_string) {
+            xfree(xxx_kex->server_version_string);
+            xxx_kex->server_version_string = NULL;
+        }
+        if (xxx_kex->name) {
+            xfree(xxx_kex->name);
+            xxx_kex->name = NULL;
+        }
+        {
+            int mode;
+            for (mode = 0; mode < MODE_MAX; mode ++) {
+                if (xxx_kex->newkeys[mode]) {
+                    xfree(xxx_kex->newkeys[mode]);
+                    xxx_kex->newkeys[mode] = NULL;
+                }
+                if (current_keys[mode]) {
+                    xfree(current_keys[mode]);
+                    current_keys[mode] = NULL;
+                }
+            }
+        }
+    }
+}
+#endif /* 0 */
+#endif /* _TOH_ */

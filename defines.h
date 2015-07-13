@@ -152,6 +152,7 @@ including rpc/rpc.h breaks Solaris 6
 typedef unsigned int u_int;
 #endif
 
+#ifndef _TOH_
 #ifndef HAVE_INTXX_T
 # if (SIZEOF_CHAR == 1)
 typedef char int8_t;
@@ -240,21 +241,34 @@ typedef unsigned long long int u_int64_t;
 #  endif
 # endif
 #endif
+#endif /* _TOH_ */
 
 #ifndef HAVE_U_CHAR
 typedef unsigned char u_char;
 # define HAVE_U_CHAR
 #endif /* HAVE_U_CHAR */
+#ifdef _TOH_
+typedef __int8  int8_t;
+typedef __int16 int16_t;
+typedef __int32 int32_t;
+typedef __int64 int64_t;
+typedef unsigned __int8   u_int8_t;
+typedef unsigned __int16  u_int16_t;
+typedef unsigned __int32  u_int32_t;
+typedef unsigned __int64  u_int64_t;
+#endif /* _TOH_ */
 
 #ifndef SIZE_T_MAX
 #define SIZE_T_MAX ULONG_MAX
 #endif /* SIZE_T_MAX */
 
+#ifndef _TOH_
 #ifndef HAVE_SIZE_T
 typedef unsigned int size_t;
 # define HAVE_SIZE_T
 # define SIZE_T_MAX UINT_MAX
 #endif /* HAVE_SIZE_T */
+#endif /* _TOH_ */
 
 #ifndef HAVE_SSIZE_T
 typedef int ssize_t;

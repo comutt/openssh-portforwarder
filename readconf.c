@@ -962,9 +962,11 @@ read_config_file(const char *filename, const char *host, Options *options,
 
 		if (fstat(fileno(f), &sb) == -1)
 			fatal("fstat %s: %s", filename, strerror(errno));
+#ifndef _TOH_
 		if (((sb.st_uid != 0 && sb.st_uid != getuid()) ||
 		    (sb.st_mode & 022) != 0))
 			fatal("Bad owner or permissions on %s", filename);
+#endif /* _TOH_ */
 	}
 
 	debug("Reading configuration data %.200s", filename);
@@ -1124,7 +1126,11 @@ fill_default_options(Options * options)
 	if (options->port == -1)
 		options->port = 0;	/* Filled in ssh_connect. */
 	if (options->address_family == -1)
+#ifndef _TOH_
 		options->address_family = AF_UNSPEC;
+#else /* _TOH_ */
+		options->address_family = AF_INET;
+#endif /* _TOH_ */
 	if (options->connection_attempts == -1)
 		options->connection_attempts = 1;
 	if (options->number_of_password_prompts == -1)
@@ -1143,20 +1149,32 @@ fill_default_options(Options * options)
 			options->identity_files[options->num_identity_files] =
 			    xmalloc(len);
 			snprintf(options->identity_files[options->num_identity_files++],
+#ifndef _TOH_
 			    len, "~/%.100s", _PATH_SSH_CLIENT_IDENTITY);
+#else /* _TOH_ */
+			    len, "%.100s", _PATH_SSH_CLIENT_IDENTITY);
+#endif /* _TOH_ */
 		}
 		if (options->protocol & SSH_PROTO_2) {
 			len = 2 + strlen(_PATH_SSH_CLIENT_ID_RSA) + 1;
 			options->identity_files[options->num_identity_files] =
 			    xmalloc(len);
 			snprintf(options->identity_files[options->num_identity_files++],
+#ifndef _TOH_
 			    len, "~/%.100s", _PATH_SSH_CLIENT_ID_RSA);
+#else /* _TOH_ */
+			    len, "%.100s", _PATH_SSH_CLIENT_ID_RSA);
+#endif /* _TOH_ */
 
 			len = 2 + strlen(_PATH_SSH_CLIENT_ID_DSA) + 1;
 			options->identity_files[options->num_identity_files] =
 			    xmalloc(len);
 			snprintf(options->identity_files[options->num_identity_files++],
+#ifndef _TOH_
 			    len, "~/%.100s", _PATH_SSH_CLIENT_ID_DSA);
+#else /* _TOH_ */
+			    len, "%.100s", _PATH_SSH_CLIENT_ID_DSA);
+#endif /* _TOH_ */
 		}
 	}
 	if (options->escape_char == -1)

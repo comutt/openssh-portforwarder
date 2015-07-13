@@ -16,11 +16,30 @@
  * called by a name other than "ssh" or "Secure Shell".
  */
 
+#if defined(_TOH_) && defined(_PFDBG_)
+
+#define xmalloc(s)  xmalloc_dbg(s, __FILE__, __LINE__)
+#define xcalloc(n, s)  xrealloc_dbg(n, s, __FILE__, __LINE__)
+#define xrealloc(p, s)  xrealloc_dbg(p, s, __FILE__, __LINE__)
+#define xfree(p)    xfree_dbg(p, __FILE__, __LINE__)
+#define xstrdup(p)  xstrdup_dbg(p, __FILE__, __LINE__)
+
+void	*xmalloc_dbg(size_t, const char *, int);
+void	xcalloc_dbg(size_t, size_t, const char *, int);
+void	*xrealloc_dbg(void *, size_t, const char *, int);
+void     xfree_dbg(void *, const char *, int);
+char	*xstrdup_dbg(const char *, const char *, int);
+
+#else  /* _TOH_ && _PFDBG_ */
+
 void	*xmalloc(size_t);
 void	*xcalloc(size_t, size_t);
 void	*xrealloc(void *, size_t, size_t);
 void     xfree(void *);
 char	*xstrdup(const char *);
+
+#endif /* _TOH_ && _PFDBG */
+
 int	 xasprintf(char **, const char *, ...)
                 __attribute__((__format__ (printf, 2, 3)))
                 __attribute__((__nonnull__ (2)));

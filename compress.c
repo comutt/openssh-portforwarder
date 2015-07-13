@@ -61,13 +61,23 @@ void
 buffer_compress_uninit(void)
 {
 	debug("compress outgoing: raw data %llu, compressed %llu, factor %.2f",
+#ifndef _TOH_
 	    (unsigned long long)outgoing_stream.total_in,
 	    (unsigned long long)outgoing_stream.total_out,
+#else /* _TOH_ */
+	    (unsigned long)outgoing_stream.total_in,
+	    (unsigned long)outgoing_stream.total_out,
+#endif /* _TOH_ */
 	    outgoing_stream.total_in == 0 ? 0.0 :
 	    (double) outgoing_stream.total_out / outgoing_stream.total_in);
 	debug("compress incoming: raw data %llu, compressed %llu, factor %.2f",
+#ifndef _TOH_
 	    (unsigned long long)incoming_stream.total_out,
 	    (unsigned long long)incoming_stream.total_in,
+#else /* _TOH_ */
+	    (unsigned long)incoming_stream.total_out,
+	    (unsigned long)incoming_stream.total_in,
+#endif /* _TOH_ */
 	    incoming_stream.total_out == 0 ? 0.0 :
 	    (double) incoming_stream.total_in / incoming_stream.total_out);
 	if (compress_init_recv_called == 1 && inflate_failed == 0)

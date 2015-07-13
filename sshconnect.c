@@ -58,6 +58,9 @@
 #include "dns.h"
 #include "version.h"
 
+#ifdef _TOH_
+extern HWND g_hWnd;
+#endif /* _TOH_ */
 char *client_version_string = NULL;
 char *server_version_string = NULL;
 
@@ -66,8 +69,10 @@ static int matching_host_key_dns = 0;
 /* import */
 extern Options options;
 extern char *__progname;
+#ifndef _TOH_
 extern uid_t original_real_uid;
 extern uid_t original_effective_uid;
+#endif /* _TOH_ */
 extern pid_t proxy_command_pid;
 
 #ifndef INET6_ADDRSTRLEN		/* for non IPv6 machines */
@@ -77,6 +82,7 @@ extern pid_t proxy_command_pid;
 static int show_other_keys(const char *, Key *);
 static void warn_changed_key(Key *);
 
+#if !defined(_TOH_) || defined(_PFPROXY_)
 /*
  * Connect to the given ssh server using a proxy command.
  */
@@ -98,11 +104,16 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 	 * Use "exec" to avoid "sh -c" processes on some platforms
 	 * (e.g. Solaris)
 	 */
+#ifndef _PFPROXY_
 	xasprintf(&tmp, "exec %s", proxy_command);
+#else   /* _PFPROXY_ */
+	xasprintf(&tmp, "%s", proxy_command);
+#endif /* _PFPROXY_ */
 	command_string = percent_expand(tmp, "h", host,
 	    "p", strport, (char *)NULL);
 	xfree(tmp);
 
+#ifndef _PFPROXY_
 	/* Create pipes for communicating with the proxy. */
 	if (pipe(pin) < 0 || pipe(pout) < 0)
 		fatal("Could not create pipes to communicate with the proxy: %.100s",
@@ -152,6 +163,72 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 	/* Close child side of the descriptors. */
 	close(pin[0]);
 	close(pout[1]);
+#else /* _PFPROXY_ */
+	{
+		SECURITY_ATTRIBUTES sa;
+		STARTUPINFO si;
+		PROCESS_INFORMATION pi;
+		HANDLE hCurProc;
+		HANDLE hReadByProxy;	/* Proxy's stdin */
+		HANDLE hWriteByProxy;	/* Proxy's stdout */
+		HANDLE hDummy;
+
+		hCurProc = GetCurrentProcess();
+		debug3("GetCurrentProcess() = %p", hCurProc);
+
+		ZeroMemory(&sa, sizeof(sa));
+		sa.nLength = sizeof(sa);
+		sa.bInheritHandle = TRUE;
+
+		if (!CreatePipe(&hReadByProxy, &hDummy, &sa, 8192))
+			fatal("CreatePipe(stdin) failed. GetLastError()=%lu", GetLastError());
+		if (!DuplicateHandle(hCurProc, hDummy, hCurProc, &hWriteToProxy, 0, FALSE, DUPLICATE_SAME_ACCESS))
+			fatal("DuplicateHandle(stdin) failed. GetLastError()=%lu", GetLastError());
+		if (!CloseHandle(hDummy))
+			fatal("CloseHandle(stdin-dummy) failed. GetLastError()=%lu", GetLastError());
+
+		if (!CreatePipe(&hDummy, &hWriteByProxy, &sa, 8192))
+			fatal("CreatePipe(stdout) failed. GetLastError()=%lu", GetLastError());
+		if (!DuplicateHandle(hCurProc, hDummy, hCurProc, &hReadFromProxy, 0, FALSE, DUPLICATE_SAME_ACCESS))
+			fatal("DuplicateHandle(stdout) failed. GetLastError()=%lu", GetLastError());
+		if (!CloseHandle(hDummy))
+			fatal("CloseHandle(stdout-dummy) failed. GetLastError()=%lu", GetLastError());
+
+		debug("Executing proxy command: %.500s", command_string);
+
+		ZeroMemory(&si, sizeof(si));
+		si.cb = sizeof(si);
+#if 1
+		/* hide console screen */
+		si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+		si.wShowWindow = SW_HIDE;
+#else /* 1 */
+		/* DEBUG: show console screen */
+		si.dwFlags = STARTF_USESTDHANDLES;
+#endif /* 1 */
+		si.hStdInput = hReadByProxy;
+		si.hStdOutput = hWriteByProxy;
+		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+
+		if (!CreateProcess(NULL, command_string, &sa, NULL, TRUE,
+			CREATE_NEW_PROCESS_GROUP, NULL, NULL, &si, &pi))
+			fatal("CreateProcess failed(%lu): %s", GetLastError(), command_string);
+		else {
+			proxy_command_pid = (pid_t)pi.dwProcessId;
+			debug("Proxy's pid=%d", proxy_command_pid);
+			hProxy = pi.hProcess;
+			isProxy = TRUE;
+			if (!CloseHandle(pi.hThread))
+				fatal("CloseHandle(proxy-thread) failed. GetLastError()=%lu", GetLastError());
+			if (!CloseHandle(hReadByProxy))
+				fatal("CloseHandle(proxy-stdin) failed. GetLastError()=%lu", GetLastError());
+			if (!CloseHandle(hWriteByProxy))
+				fatal("CloseHandle(proxy-stdout) failed. GetLastError()=%lu", GetLastError());
+		}
+		pout[0] = (int)PIPE_IN_DUMMY_SOCKET;    /* dummy for the following packet_set_connection() */
+		pin[1]  = (int)PIPE_OUT_DUMMY_SOCKET;
+	}
+#endif /* _PFPROXY_ */
 
 	/* Free the command name. */
 	xfree(command_string);
@@ -162,6 +239,7 @@ ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 	/* Indicate OK return */
 	return 0;
 }
+#endif /* !_TOH_ || _PFPROXY_ */
 
 /*
  * Creates a (possibly privileged) socket for use as the ssh connection.
@@ -172,6 +250,7 @@ ssh_create_socket(int privileged, struct addrinfo *ai)
 	int sock, gaierr;
 	struct addrinfo hints, *res;
 
+#ifndef _TOH_
 	/*
 	 * If we are running as root and want to connect to a privileged
 	 * port, bind our own socket to a privileged port.
@@ -188,6 +267,7 @@ ssh_create_socket(int privileged, struct addrinfo *ai)
 			debug("Allocated local port %d.", p);
 		return sock;
 	}
+#endif /* _TOH_ */
 	sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 	if (sock < 0)
 		error("socket: %.100s", strerror(errno));
@@ -239,8 +319,13 @@ timeout_connect(int sockfd, const struct sockaddr *serv_addr,
 	if (errno != EINPROGRESS)
 		return (-1);
 
+#ifndef _TOH_
 	fdset = (fd_set *)xcalloc(howmany(sockfd + 1, NFDBITS),
 	    sizeof(fd_mask));
+#else /* _TOH_ */
+	fdset = (fd_set *)xmalloc(sizeof(fd_set));
+	FD_ZERO(fdset);
+#endif /* _TOH_ */
 	FD_SET(sockfd, fdset);
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
@@ -254,7 +339,9 @@ timeout_connect(int sockfd, const struct sockaddr *serv_addr,
 	switch (rc) {
 	case 0:
 		/* Timed out */
+#ifndef _TOH_
 		errno = ETIMEDOUT;
+#endif /* _TOH_ */
 		break;
 	case -1:
 		/* Select error */
@@ -310,8 +397,10 @@ ssh_connect(const char *host, struct sockaddr_storage * hostaddr,
 	debug2("ssh_connect: needpriv %d", needpriv);
 
 	/* If a proxy command is given, connect using it. */
+#if !defined(_TOH_) || defined(_PFPROXY_)
 	if (proxy_command != NULL)
 		return ssh_proxy_connect(host, port, proxy_command);
+#endif /* !_TOH_ || _PFPROXY */
 
 	/* No proxy command. */
 
@@ -500,6 +589,7 @@ ssh_exchange_identification(void)
 static int
 confirm(const char *prompt)
 {
+#ifndef _TOH_
 	const char *msg, *again = "Please type 'yes' or 'no': ";
 	char *p;
 	int ret = -1;
@@ -519,6 +609,24 @@ confirm(const char *prompt)
 		if (ret != -1)
 			return ret;
 	}
+#else /* _TOH_ */
+    msgboxinfo info;
+    info.caption = APP_NAME;
+    info.message = prompt;
+    info.type = MB_YESNO | MB_ICONQUESTION;
+
+    if (options.batch_mode)
+        return 0;
+
+    SendMessage(g_hWnd, MSG_SHOW_MESSAGEBOX, (WPARAM)&info, 0);
+
+    if (info.result == IDYES) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+#endif /* _TOH_ */
 }
 
 /*
@@ -710,6 +818,7 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 			/* The default */
 			fp = key_fingerprint(host_key, SSH_FP_MD5, SSH_FP_HEX);
 			msg2[0] = '\0';
+#ifndef _TOH_
 			if (options.verify_host_key_dns) {
 				if (matching_host_key_dns)
 					snprintf(msg2, sizeof(msg2),
@@ -720,6 +829,7 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 					    "No matching host key fingerprint"
 					    " found in DNS.\n");
 			}
+#endif /* _TOH_ */
 			snprintf(msg, sizeof(msg),
 			    "The authenticity of host '%.200s (%s)' can't be "
 			    "established%s\n"
@@ -775,6 +885,7 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 				key_msg = "is unchanged";
 			else
 				key_msg = "has a different value";
+#ifndef _TOH_
 			error("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 			error("@       WARNING: POSSIBLE DNS SPOOFING DETECTED!          @");
 			error("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
@@ -785,12 +896,43 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 			error("and its host key have changed at the same time.");
 			if (ip_status != HOST_NEW)
 				error("Offending key for IP in %s:%d", ip_file, ip_line);
+#else /* _TOH_ */
+			error("@@      WARNING: POSSIBLE DNS SPOOFING DETECTED!         @@"
+                  "\n"
+			      "The %s host key for %s has changed,"
+			      "and the key for the according IP address %s"
+			      "%s. This could either mean that"
+			      "DNS SPOOFING is happening or the IP address for the host"
+			      "and its host key have changed at the same time.",
+                  type, host, ip, key_msg);
+			if (ip_status != HOST_NEW)
+				error("Offending key for IP in %s:%d", ip_file, ip_line);
+#endif /* _TOH_ */
 		}
 		/* The host key has changed. */
+#ifndef _TOH_
 		warn_changed_key(host_key);
 		error("Add correct host key in %.100s to get rid of this message.",
 		    user_hostfile);
 		error("Offending key in %s:%d", host_file, host_line);
+#else /* _TOH_ */
+		{
+		char *fp;
+		const char *type = key_type(host_key);
+		fp = key_fingerprint(host_key, SSH_FP_MD5, SSH_FP_HEX);
+		error("@@   WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!    @@"
+              "\n"
+		      "IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!"
+		      "Someone could be eavesdropping on you right now (man-in-the-middle attack)!"
+		      "It is also possible that the %s host key has just been changed."
+		      "The fingerprint for the %s key sent by the remote host is\n%s."
+		      "Please contact your system administrator."
+		      "Add correct host key in %.100s to get rid of this message."
+		      "Offending key in %s:%d",
+              type, type, fp, user_hostfile, host_file, host_line);
+		xfree(fp);
+		}
+#endif /* _TOH_ */
 
 		/*
 		 * If strict host key checking is in use, the user will have
@@ -902,6 +1044,7 @@ verify_host_key(char *host, struct sockaddr *hostaddr, Key *host_key)
 	struct stat st;
 	int flags = 0;
 
+#ifndef _TOH_
 	if (options.verify_host_key_dns &&
 	    verify_host_key_dns(host, hostaddr, host_key, &flags) == 0) {
 
@@ -921,6 +1064,7 @@ verify_host_key(char *host, struct sockaddr *hostaddr, Key *host_key)
 			}
 		}
 	}
+#endif /* _TOH_ */
 
 	/* return ok if the key can be found in an old keyfile */
 	if (stat(options.system_hostfile2, &st) == 0 ||
@@ -943,12 +1087,20 @@ verify_host_key(char *host, struct sockaddr *hostaddr, Key *host_key)
  */
 void
 ssh_login(Sensitive *sensitive, const char *orighost,
+#ifndef _TOH_
     struct sockaddr *hostaddr, struct passwd *pw)
+#else /* _TOH_ */
+    struct sockaddr *hostaddr)
+#endif /* _TOH_ */
 {
 	char *host, *cp;
 	char *server_user, *local_user;
 
+#ifndef _TOH_
 	local_user = xstrdup(pw->pw_name);
+#else /* _TOH_ */
+    local_user = xstrdup(options.user);
+#endif /* _TOH_ */
 	server_user = options.user ? options.user : local_user;
 
 	/* Convert the user-supplied hostname into all lowercase. */
@@ -1048,6 +1200,7 @@ show_other_keys(const char *host, Key *key)
 	return (found);
 }
 
+#ifndef _TOH_
 static void
 warn_changed_key(Key *host_key)
 {
@@ -1104,3 +1257,4 @@ ssh_local_cmd(const char *args)
 
 	return (WEXITSTATUS(status));
 }
+#endif /* _TOH_ */

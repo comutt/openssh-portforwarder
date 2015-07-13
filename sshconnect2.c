@@ -244,10 +244,12 @@ Authmethod authmethods[] = {
 		&options.gss_authentication,
 		NULL},
 #endif
+#ifndef _TOH_
 	{"hostbased",
 		userauth_hostbased,
 		&options.hostbased_authentication,
 		NULL},
+#endif /* _TOH_ */
 	{"publickey",
 		userauth_pubkey,
 		&options.pubkey_authentication,
@@ -988,7 +990,11 @@ load_identity_file(char *filename)
 		if (options.batch_mode)
 			return NULL;
 		snprintf(prompt, sizeof prompt,
+#ifndef _TOH_
 		    "Enter passphrase for key '%.100s': ", filename);
+#else /* _TOH_ */
+		    "Enter passphrase for key '%.100s': ", strrchr(filename, '\\') + 1);
+#endif /* _TOH_ */
 		for (i = 0; i < options.number_of_password_prompts; i++) {
 			passphrase = read_passphrase(prompt, 0);
 			if (strcmp(passphrase, "") != 0) {
@@ -1226,6 +1232,7 @@ input_userauth_info_req(int type, u_int32_t seq, void *ctxt)
 	packet_send();
 }
 
+#ifndef _TOH_
 static int
 ssh_keysign(Key *key, u_char **sigp, u_int *lenp,
     u_char *data, u_int datalen)
@@ -1403,6 +1410,7 @@ userauth_hostbased(Authctxt *authctxt)
 	packet_send();
 	return 1;
 }
+#endif /* _TOH_ */
 
 /* find auth method */
 

@@ -40,6 +40,10 @@
 #include "compat.h"
 #include "log.h"
 
+#ifdef _TOH_
+#include <signal.h>
+extern volatile sig_atomic_t quit_pending;
+#endif /* _TOH_ */
 /*
  * SSH Protocol 1.5 aka New Channel Protocol
  * Thanks to Martina, Axel and everyone who left Erlangen, leaving me bored.
@@ -468,6 +472,15 @@ chan_shutdown_read(Channel *c)
 {
 	if (compat20 && c->type == SSH_CHANNEL_LARVAL)
 		return;
+#ifdef _TOH_
+    if (!strcmp(c->ctype, "session")) {
+        /* this channel is for stdin, stdout, stderr.
+         * DO NOT SHUTDOWN!!!
+         */
+        quit_pending = 1;
+        return;
+    }
+#endif /* _TOH_ */
 	debug2("channel %d: close_read", c->self);
 	if (c->sock != -1) {
 		/*
@@ -476,7 +489,11 @@ chan_shutdown_read(Channel *c)
 		 * HP-UX may return ENOTCONN also.
 		 */
 		if (shutdown(c->sock, SHUT_RD) < 0
+#ifndef _TOH_
 		    && errno != ENOTCONN)
+#else /* _TOH_ */
+		    && WSAGetLastError() != WSAENOTCONN)
+#endif /* _TOH_ */
 			error("channel %d: chan_shutdown_read: "
 			    "shutdown() failed for fd%d [i%d o%d]: %.100s",
 			    c->self, c->sock, c->istate, c->ostate,

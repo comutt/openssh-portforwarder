@@ -55,8 +55,10 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <arpa/nameser.h>
+#ifndef _TOH_
 #include <netdb.h>
 #include <resolv.h>
+#endif /* _TOH_ */
 
 #ifndef HFIXEDSZ
 #define HFIXEDSZ 12

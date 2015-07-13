@@ -36,7 +36,11 @@ ssh_connect(const char *, struct sockaddr_storage *, u_short, int, int,
     int, const char *);
 
 void
+#ifndef _TOH_
 ssh_login(Sensitive *, const char *, struct sockaddr *, struct passwd *);
+#else /* _TOH_ */
+ssh_login(Sensitive *, const char *, struct sockaddr *);
+#endif /* _TOH_ */
 
 int	 verify_host_key(char *, struct sockaddr *, Key *);
 

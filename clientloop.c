@@ -142,7 +142,14 @@ static volatile sig_atomic_t received_signal = 0;
 static int in_non_blocking_mode = 0;
 
 /* Common data for the client loop code. */
+#ifndef _TOH_
 static volatile sig_atomic_t quit_pending; /* Set non-zero to quit the loop. */
+#else /* _TOH_ */
+volatile sig_atomic_t quit_pending; /* set to 1 in nchan.c when session is closed by server. */
+#ifdef _PFPROXY_
+extern pid_t proxy_command_pid;
+#endif /* _PFPROXY_ */
+#endif /* _TOH_ */
 static int escape_char;		/* Escape character. */
 static int escape_pending;	/* Last character was the escape character */
 static int last_was_cr;		/* Last character was a newline. */
@@ -169,7 +176,9 @@ struct confirm_ctx {
 	int want_agent_fwd;
 	Buffer cmd;
 	char *term;
+#ifndef _TOH_
 	struct termios tio;
+#endif /* _TOH_ */
 	char **env;
 };
 
@@ -178,6 +187,7 @@ extern Kex *xxx_kex;
 
 void ssh_process_session2_setup(int, int, int, Buffer *);
 
+#ifndef _TOH_
 /* Restores stdin to blocking mode. */
 
 static void
@@ -463,6 +473,7 @@ client_check_window_change(void)
 		packet_send();
 	}
 }
+#endif /* _TOH_ */
 
 static void
 client_global_request_reply(int type, u_int32_t seq, void *ctxt)
@@ -504,6 +515,7 @@ client_wait_until_can_do_something(fd_set **readsetp, fd_set **writesetp,
 		    buffer_len(&stderr_buffer) < buffer_high &&
 		    channel_not_very_much_buffered_data())
 			FD_SET(connection_in, *readsetp);
+#ifndef _TOH_
 		/*
 		 * Read from stdin, unless we have seen EOF or have very much
 		 * buffered data to send to the server.
@@ -516,13 +528,19 @@ client_wait_until_can_do_something(fd_set **readsetp, fd_set **writesetp,
 			FD_SET(fileno(stdout), *writesetp);
 		if (buffer_len(&stderr_buffer) > 0)
 			FD_SET(fileno(stderr), *writesetp);
+#endif /* _TOH_ */
 	} else {
 		/* channel_prepare_select could have closed the last channel */
 		if (session_closed && !channel_still_open() &&
 		    !packet_have_data_to_write()) {
 			/* clear mask since we did not call select() */
+#ifndef _TOH_
 			memset(*readsetp, 0, *nallocp);
 			memset(*writesetp, 0, *nallocp);
+#else /* _TOH_ */
+			FD_ZERO(*readsetp);
+			FD_ZERO(*writesetp);
+#endif /* _TOH_ */
 			return;
 		} else {
 			FD_SET(connection_in, *readsetp);
@@ -558,19 +576,27 @@ client_wait_until_can_do_something(fd_set **readsetp, fd_set **writesetp,
 		 * We have to return, because the mainloop checks for the flags
 		 * set by the signal handlers.
 		 */
+#ifndef _TOH_
 		memset(*readsetp, 0, *nallocp);
 		memset(*writesetp, 0, *nallocp);
+#else /* _TOH_ */
+		FD_ZERO(*readsetp);
+		FD_ZERO(*writesetp);
+#endif /* _TOH_ */
 
 		if (errno == EINTR)
 			return;
 		/* Note: we might still have data in the buffers. */
 		snprintf(buf, sizeof buf, "select: %s\r\n", strerror(errno));
+#ifndef _TOH_
 		buffer_append(&stderr_buffer, buf, strlen(buf));
+#endif /* _TOH_ */
 		quit_pending = 1;
 	} else if (ret == 0)
 		server_alive_check();
 }
 
+#ifndef _TOH_
 static void
 client_suspend_self(Buffer *bin, Buffer *bout, Buffer *berr)
 {
@@ -603,6 +629,7 @@ client_suspend_self(Buffer *bin, Buffer *bout, Buffer *berr)
 
 	enter_raw_mode();
 }
+#endif /* _TOH_ */
 
 static void
 client_process_net_input(fd_set *readset)
@@ -666,6 +693,7 @@ client_subsystem_reply(int type, u_int32_t seq, void *ctxt)
 	}
 }
 
+#ifndef _TOH_
 static void
 client_extra_session2_setup(int id, void *arg)
 {
@@ -1271,10 +1299,12 @@ client_process_input(fd_set *readset)
 		}
 	}
 }
+#endif /* _TOH_ */
 
 static void
 client_process_output(fd_set *writeset)
 {
+#ifndef _TOH_
 	int len;
 	char buf[100];
 
@@ -1319,6 +1349,11 @@ client_process_output(fd_set *writeset)
 		buffer_consume(&stderr_buffer, len);
 		stderr_bytes += len;
 	}
+#else /* _TOH_ */
+	/* just consume buffers */
+	buffer_consume(&stdout_buffer, buffer_len(&stdout_buffer));
+	buffer_consume(&stderr_buffer, buffer_len(&stderr_buffer));
+#endif /* _TOH_ */
 }
 
 /*
@@ -1341,19 +1376,23 @@ client_process_buffered_input_packets(void)
 
 /* scan buf[] for '~' before sending data to the peer */
 
+#ifndef _TOH_
 static int
 simple_escape_filter(Channel *c, char *buf, int len)
 {
 	/* XXX we assume c->extended is writeable */
 	return process_escapes(&c->input, &c->output, &c->extended, buf, len);
 }
+#endif /* _TOH_ */
 
 static void
 client_channel_closed(int id, void *arg)
 {
 	channel_cancel_cleanup(id);
 	session_closed = 1;
+#ifndef _TOH_
 	leave_raw_mode();
+#endif /* _TOH_ */
 }
 
 /*
@@ -1374,7 +1413,9 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 
 	debug("Entering interactive session.");
 
+#ifndef _TOH_
 	start_time = get_current_time();
+#endif /* _TOH_ */
 
 	/* Initialize variables. */
 	escape_pending = 0;
@@ -1389,6 +1430,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		max_fd = MAX(max_fd, control_fd);
 
 	if (!compat20) {
+#ifndef _TOH_
 		/* enable nonblocking unless tty */
 		if (!isatty(fileno(stdin)))
 			set_nonblock(fileno(stdin));
@@ -1399,6 +1441,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		max_fd = MAX(max_fd, fileno(stdin));
 		max_fd = MAX(max_fd, fileno(stdout));
 		max_fd = MAX(max_fd, fileno(stderr));
+#endif /* _TOH_ */
 	}
 	stdin_bytes = 0;
 	stdout_bytes = 0;
@@ -1417,6 +1460,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	 * Set signal handlers, (e.g. to restore non-blocking mode)
 	 * but don't overwrite SIG_IGN, matches behaviour from rsh(1)
 	 */
+#ifndef _TOH_
 	if (signal(SIGHUP, SIG_IGN) != SIG_IGN)
 		signal(SIGHUP, signal_handler);
 	if (signal(SIGINT, SIG_IGN) != SIG_IGN)
@@ -1429,18 +1473,23 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 
 	if (have_pty)
 		enter_raw_mode();
+#endif /* _TOH_ */
 
 	if (compat20) {
 		session_ident = ssh2_chan_id;
+#ifndef _TOH_
 		if (escape_char != SSH_ESCAPECHAR_NONE)
 			channel_register_filter(session_ident,
 			    simple_escape_filter, NULL);
+#endif /* _TOH_ */
 		if (session_ident != -1)
 			channel_register_cleanup(session_ident,
 			    client_channel_closed, 0);
 	} else {
 		/* Check if we should immediately send eof on stdin. */
+#ifndef _TOH_
 		client_check_initial_eof_on_stdin();
+#endif /* _TOH_ */
 	}
 
 	/* Main loop of the client for the interactive session mode. */
@@ -1461,8 +1510,10 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 			 * Make packets of buffered stdin data, and buffer
 			 * them for sending to the server.
 			 */
+#ifndef _TOH_
 			if (!compat20)
 				client_make_packets_from_stdin_data();
+#endif /* _TOH_ */
 
 			/*
 			 * Make packets from buffered channel data, and
@@ -1475,7 +1526,9 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 			 * Check if the window size has changed, and buffer a
 			 * message about it to the server if so.
 			 */
+#ifndef _TOH_
 			client_check_window_change();
+#endif /* _TOH_ */
 
 			if (quit_pending)
 				break;
@@ -1505,15 +1558,19 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		/* Buffer input from the connection.  */
 		client_process_net_input(readset);
 
+#ifndef _TOH_
 		/* Accept control connections.  */
 		client_process_control(readset);
+#endif /* _TOH_ */
 
 		if (quit_pending)
 			break;
 
 		if (!compat20) {
 			/* Buffer data from stdin */
+#ifndef _TOH_
 			client_process_input(readset);
+#endif /* _TOH_ */
 			/*
 			 * Process output to stdout and stderr.  Output to
 			 * the connection is processed elsewhere (above).
@@ -1533,10 +1590,13 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	/* Terminate the session. */
 
 	/* Stop watching for window change. */
+#ifndef _TOH_
 	signal(SIGWINCH, SIG_DFL);
+#endif /* _TOH_ */
 
 	channel_free_all();
 
+#ifndef _TOH_
 	if (have_pty)
 		leave_raw_mode();
 
@@ -1560,6 +1620,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 
 	if (received_signal)
 		fatal("Killed by signal %d.", (int) received_signal);
+#endif /* _TOH_ */
 
 	/*
 	 * In interactive mode (with pseudo tty) display a message indicating
@@ -1571,6 +1632,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	}
 
 	/* Output any buffered data for stdout. */
+#ifndef _TOH_
 	while (buffer_len(&stdout_buffer) > 0) {
 		len = write(fileno(stdout), buffer_ptr(&stdout_buffer),
 		    buffer_len(&stdout_buffer));
@@ -1593,6 +1655,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		buffer_consume(&stderr_buffer, len);
 		stderr_bytes += len;
 	}
+#endif /* _TOH_ */
 
 	/* Clear and free any buffers. */
 	memset(buf, 0, sizeof(buf));
@@ -1601,6 +1664,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 	buffer_free(&stderr_buffer);
 
 	/* Report bytes transferred, and transfer rates. */
+#ifndef _TOH_
 	total_time = get_current_time() - start_time;
 	debug("Transferred: stdin %lu, stdout %lu, stderr %lu bytes in %.1f seconds",
 	    stdin_bytes, stdout_bytes, stderr_bytes, total_time);
@@ -1608,6 +1672,7 @@ client_loop(int have_pty, int escape_char_arg, int ssh2_chan_id)
 		debug("Bytes per second: stdin %.1f, stdout %.1f, stderr %.1f",
 		    stdin_bytes / total_time, stdout_bytes / total_time,
 		    stderr_bytes / total_time);
+#endif /* _TOH_ */
 
 	/* Return the exit status of the program. */
 	debug("Exit status %d", exit_status);
@@ -1726,6 +1791,7 @@ client_request_forwarded_tcpip(const char *request_type, int rchan)
 	return c;
 }
 
+#ifndef _TOH_
 static Channel *
 client_request_x11(const char *request_type, int rchan)
 {
@@ -1760,6 +1826,7 @@ client_request_x11(const char *request_type, int rchan)
 	c->force_drain = 1;
 	return c;
 }
+#endif /* _TOH_ */
 
 static Channel *
 client_request_agent(const char *request_type, int rchan)
@@ -1783,6 +1850,7 @@ client_request_agent(const char *request_type, int rchan)
 	return c;
 }
 
+#ifndef _TOH_
 int
 client_request_tun_fwd(int tun_mode, int local_tun, int remote_tun)
 {
@@ -1826,6 +1894,7 @@ client_request_tun_fwd(int tun_mode, int local_tun, int remote_tun)
 
 	return 0;
 }
+#endif /* _TOH_ */
 
 /* XXXX move to generic input handler */
 static void
@@ -1847,7 +1916,11 @@ client_input_channel_open(int type, u_int32_t seq, void *ctxt)
 	if (strcmp(ctype, "forwarded-tcpip") == 0) {
 		c = client_request_forwarded_tcpip(ctype, rchan);
 	} else if (strcmp(ctype, "x11") == 0) {
+#ifndef _TOH_
 		c = client_request_x11(ctype, rchan);
+#else /* _TOH_ */
+		c = NULL;   /* indicating ForwardX11 not supported */
+#endif /* _TOH_ */
 	} else if (strcmp(ctype, "auth-agent@openssh.com") == 0) {
 		c = client_request_agent(ctype, rchan);
 	}
@@ -1940,7 +2013,11 @@ client_input_global_request(int type, u_int32_t seq, void *ctxt)
 
 void
 client_session2_setup(int id, int want_tty, int want_subsystem,
+#ifndef _TOH_
     const char *term, struct termios *tiop, int in_fd, Buffer *cmd, char **env,
+#else /* _TOH_ */
+    const char *term, int in_fd, Buffer *cmd, char **env,
+#endif /* _TOH_ */
     dispatch_fn *subsys_repl)
 {
 	int len;
@@ -1951,6 +2028,7 @@ client_session2_setup(int id, int want_tty, int want_subsystem,
 	if ((c = channel_lookup(id)) == NULL)
 		fatal("client_session2_setup: channel %d: unknown channel", id);
 
+#ifndef _TOH_
 	if (want_tty) {
 		struct winsize ws;
 		struct termios tio;
@@ -1971,6 +2049,7 @@ client_session2_setup(int id, int want_tty, int want_subsystem,
 		/* XXX wait for reply */
 		c->client_tty = 1;
 	}
+#endif /* _TOH_ */
 
 	/* Transfer any environment variables from client to server */
 	if (options.num_send_env != 0 && env != NULL) {
@@ -2073,8 +2152,12 @@ client_init_dispatch_13(void)
 
 	dispatch_set(SSH_SMSG_AGENT_OPEN, options.forward_agent ?
 	    &client_input_agent_open : &deny_input_open);
+#ifndef _TOH_
 	dispatch_set(SSH_SMSG_X11_OPEN, options.forward_x11 ?
 	    &x11_input_open : &deny_input_open);
+#else  /* _TOH_ */
+	dispatch_set(SSH_SMSG_X11_OPEN, &deny_input_open);
+#endif /* _TOH_ */
 }
 static void
 client_init_dispatch_15(void)
@@ -2098,9 +2181,70 @@ client_init_dispatch(void)
 void
 cleanup_exit(int i)
 {
+#ifndef _TOH_
 	leave_raw_mode();
 	leave_non_blocking();
 	if (options.control_path != NULL && control_fd != -1)
 		unlink(options.control_path);
 	_exit(i);
+#else /* _TOH_ */
+	ThreadExit();
+#endif /* _TOH_ */
 }
+
+#ifdef _TOH_
+/* Sends MSG_DISCONNECT to server. */
+void close_now()
+{
+#ifndef _TOH_TEST_
+	/* Send the disconnect message to the other side, and wait for it to get sent. */
+    char buf[] = "PortForwarder disconnecting...";
+    /* the code below is from packet.c */
+	if (compat20) {
+		packet_start(SSH2_MSG_DISCONNECT);
+		packet_put_int(SSH2_DISCONNECT_PROTOCOL_ERROR);
+		packet_put_cstring(buf);
+		packet_put_cstring("");
+	} else {
+		packet_start(SSH_MSG_DISCONNECT);
+		packet_put_cstring(buf);
+	}
+#else /* _TOH_TEST_ */
+    /* i don't know why but this doesn't work... */
+    quit_pending = 1;
+    /* send ignore packet just to exit select(). */
+    packet_send_ignore(4);
+#endif /* _TOH_TEST_1 */
+	packet_send();
+	packet_write_wait();
+
+#ifdef _PFPROXY_
+	/* if using proxy then stop the proxy with:     */
+	/*   1. sending Ctrl+Break signal; and then,    */
+	/*   2. closeing pipes; and then,               */
+	/*   3. TerminateProcess().                     */
+	if (isProxy) {
+		DWORD rv;
+		if (!GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, (DWORD)proxy_command_pid)) {
+			debug3("GenerateConsoleCtrlEvent failed. GetLastError()=%lu", GetLastError());
+			}
+		CloseHandle(hWriteToProxy);
+		CloseHandle(hReadFromProxy);
+		rv = WaitForSingleObject(hProxy, 1000);
+		if (rv != WAIT_OBJECT_0) {
+			debug3("WaitForSingleObject(1000) = %lu", rv);
+			if (!TerminateProcess(hProxy, 8))
+				debug("TerminateProcess failed. GetLastError()=%lu", GetLastError());
+			}
+		CloseHandle(hProxy);
+		}
+#endif /* _PFPROXY_ */
+}
+
+void buffers_free()
+{
+	buffer_free(&stdin_buffer);
+	buffer_free(&stdout_buffer);
+	buffer_free(&stderr_buffer);
+}
+#endif /* _TOH_ */

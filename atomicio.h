@@ -36,10 +36,12 @@ size_t	atomicio(ssize_t (*)(int, void *, size_t), int, void *, size_t);
 
 #define vwrite (ssize_t (*)(int, void *, size_t))write
 
+#ifndef _TOH_
 /*
  * ensure all of data on socket comes through. f==readv || f==writev
  */
 size_t	atomiciov(ssize_t (*)(int, const struct iovec *, int),
     int, const struct iovec *, int);
+#endif /* _TOH_ */
 
 #endif /* _ATOMICIO_H */

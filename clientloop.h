@@ -42,8 +42,13 @@ int	 client_loop(int, int, int);
 void	 client_x11_get_proto(const char *, const char *, u_int,
 	    char **, char **);
 void	 client_global_request_reply_fwd(int, u_int32_t, void *);
+#ifndef _TOH_
 void	 client_session2_setup(int, int, int, const char *, struct termios *,
 	    int, Buffer *, char **, dispatch_fn *);
+#else /* _TOH_ */
+void	 client_session2_setup(int, int, int, const char *,
+	    int, Buffer *, char **, dispatch_fn *);
+#endif /* _TOH_ */
 int	 client_request_tun_fwd(int, int, int);
 
 /* Multiplexing protocol version */

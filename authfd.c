@@ -63,6 +63,9 @@
 #include "log.h"
 #include "atomicio.h"
 #include "misc.h"
+#if defined(_TOH_) && defined(USE_PAGEANT)
+#include "auth-pageant.h"
+#endif
 
 static int agent_present = 0;
 
@@ -94,6 +97,20 @@ ssh_agent_present(void)
 int
 ssh_get_authentication_socket(void)
 {
+#if defined(_TOH_) && defined(USE_PAGEANT)
+	int sock;
+	struct sockaddr_in addr;
+
+	if((sock = socket(AF_INET,SOCK_STREAM,0)) < 0)
+		return -1;
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(pageant_get_port());
+	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+		close(sock);
+		return -1;
+	}
+#else
 	const char *authsocket;
 	int sock;
 	struct sockaddr_un sunaddr;
@@ -110,14 +127,17 @@ ssh_get_authentication_socket(void)
 		return -1;
 
 	/* close on exec */
+#ifndef _TOH_
 	if (fcntl(sock, F_SETFD, 1) == -1) {
 		close(sock);
 		return -1;
 	}
+#endif /* _TOH_ */
 	if (connect(sock, (struct sockaddr *)&sunaddr, sizeof sunaddr) < 0) {
 		close(sock);
 		return -1;
 	}
+#endif
 	agent_present = 1;
 	return sock;
 }
@@ -178,8 +198,12 @@ ssh_request_reply(AuthenticationConnection *auth, Buffer *request, Buffer *reply
 void
 ssh_close_authentication_socket(int sock)
 {
+#if defined(_TOH_) && defined(USE_PAGEANT)
+	close(sock);
+#else
 	if (getenv(SSH_AUTHSOCKET_ENV_NAME))
 		close(sock);
+#endif
 }
 
 /*

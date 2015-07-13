@@ -258,7 +258,12 @@ try_rsa_authentication(int idx)
 		    &perm_ok);
 	if (private == NULL && !options.batch_mode && perm_ok) {
 		snprintf(buf, sizeof(buf),
+#ifndef _TOH_
 		    "Enter passphrase for RSA key '%.100s': ", comment);
+#else /* _TOH_ */
+		    "Enter passphrase for RSA key '%.100s': ",
+            strrchr(authfile, '\\') + 1);
+#endif /* _TOH_ */
 		for (i = 0; i < options.number_of_password_prompts; i++) {
 			passphrase = read_passphrase(buf, 0);
 			if (strcmp(passphrase, "") != 0) {

@@ -63,10 +63,13 @@ atomicio(ssize_t (*f) (int, void *, size_t), int fd, void *_s, size_t n)
 			if (errno == EINTR)
 #endif
 				continue;
+#ifndef _TOH_
+			/* ignore EAGAIN and poll() because it is not returned by WinSock */
 			if (errno == EAGAIN) {
 				(void)poll(&pfd, 1, -1);
 				continue;
 			}
+#endif /* _TOH_ */
 			return 0;
 		case 0:
 			errno = EPIPE;
@@ -78,6 +81,7 @@ atomicio(ssize_t (*f) (int, void *, size_t), int fd, void *_s, size_t n)
 	return (pos);
 }
 
+#ifndef _TOH_
 /*
  * ensure all of data on socket comes through. f==readv || f==writev
  */
@@ -109,10 +113,13 @@ atomiciov(ssize_t (*f) (int, const struct iovec *, int), int fd,
 			if (errno == EINTR)
 #endif
 				continue;
+#ifndef _TOH_
+			/* ignore EAGAIN and poll() because it is not returned by WinSock */
 			if (errno == EAGAIN) {
 				(void)poll(&pfd, 1, -1);
 				continue;
 			}
+#endif /* _TOH_ */
 			return 0;
 		case 0:
 			errno = EPIPE;
@@ -140,3 +147,4 @@ atomiciov(ssize_t (*f) (int, const struct iovec *, int), int fd,
 	}
 	return pos;
 }
+#endif /* _TOH_ */
